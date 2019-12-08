@@ -3,7 +3,8 @@ CREATE DATABASE bincache;
 \c bincache
 
 CREATE TABLE "cache" (
-    filename varchar(500),      -- file name on disk
+    filename varchar(500),              -- file name of the binary 
+    path_on_disk varchar(500),          -- the file name we gave it on our disk
     md5 varchar(33), 
     sha1 varchar(42), 
     sha256 varchar(65) primary key, 

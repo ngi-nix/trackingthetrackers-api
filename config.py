@@ -11,7 +11,7 @@ config.update(dict(
     version=0.1,
     debug=True,
     DATABASE='bincache',
-    USERNAME='aaron',           # replace by the username
+    USERNAME='bincache',           # replace by the username
     PASSWORD='',
     DBHOST='localhost',
     DBPORT=5432,

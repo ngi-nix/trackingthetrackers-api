@@ -19,14 +19,19 @@ def is_malware(filename: str) -> bool:
     """
     This function returns True if the uploaded binary residing in "filename" is malware.
     False otherwise.
-    :param filename:
-    :return: True if malware
+    @param filename:
+    @return: True if malware
     """
     # XXX FIXME XXX insert the call to your function
     return False
 
 
 def is_cached(sha256: str) -> bool:
+    """
+    This function checks if a certain file's hash is in the global cache
+    @param sha256: the hash of the uploaded file
+    @return: True, if it's in the cache
+    """
     global cache
 
     return sha256 in cache
@@ -49,15 +54,25 @@ def classify_apk_file(filename: str) -> bool:
     return is_malware(filename)
 
 
-def initial_check_file(file: UploadFile):
+def initial_check_file(file: UploadFile) -> bool:
+    """
+    Do an initial check of the file. All checks which can be done before
+    it gets sent to the classifier should be run.
+    @param file: the uploaded file
+    @return: True on success. Exception on failure
+    """
     if file.content_type != "application/vnd.android.package-archive":
         raise HTTPException(status_code=400, detail="I only accept Android APK files as input.")
-
+    return True
 
 # ==============================================================
 # helper functions
 async def hash_file(file: UploadFile) -> (str, str, str):
-    """ Hash the file according to sha1 """
+    """ Hash the file. Returns a triplet tuple: (md5, sha1, sha256)
+    @param file: the uploaded file
+    @return: tuple: (md5, sha1, sha256)
+    """
+
     logging.info("hashing file %s" %file.file.name)
     BLOCKSIZE = 65536
     hasher_md5 = hashlib.md5()

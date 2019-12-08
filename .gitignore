@@ -1,0 +1,12 @@
+.idea
+
+ENV
+keys/*
+misc/*
+
+.*.swp
+
+venv/*
+
+__pycache__
+

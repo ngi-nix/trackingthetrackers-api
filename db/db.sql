@@ -8,6 +8,7 @@ CREATE TABLE "cache" (
     md5 varchar(33), 
     sha1 varchar(42), 
     sha256 varchar(65) primary key, 
+    is_positive boolean,                -- positive if malware
     first_seen timestamp with time zone, 
     analyzed_at timestamp with time zone
 );

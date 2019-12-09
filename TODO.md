@@ -1,5 +1,6 @@
 # TODOs
 
+- [ ] make a module out of malware_cache
 - [ ] unittests for everything
 - [ ] combine unittests with CI
 - [ ] docstrings everywhere
@@ -12,6 +13,10 @@
 
 - [ ] combine with analysis engine
 
+
+# Testing
+
+- [ ] test if installation procedure works
 
 # Nice to haves
 

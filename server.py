@@ -120,7 +120,7 @@ async def upload_file(file: UploadFile = File(...)):
     (md5, sha1, sha256) = await hash_file(file)
     entry = FileEntry(file.filename, md5, sha1, sha256)
     if entry in cache:
-        is_positive = cache.get_cached_result(entry)
+        contains_malware = cache.get_cached_result(entry)
         return {'cache-hit': True, 'is_malware': is_positive}
     else:
         # XXX implement me please!

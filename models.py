@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 
-""" Example response (JSON) 
+""" Example response (JSON)
 
 {
   "uploaded_file": "/tmp/BAWAG.apk",

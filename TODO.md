@@ -1,5 +1,6 @@
 # TODOs
 
+- [ ] marhsalling of FileEntry to JSON ResponseModel object and vice versa
 - [ ] make a module out of malware_cache
 - [ ] unittests for everything
 - [ ] combine unittests with CI
@@ -17,6 +18,10 @@
 # Testing
 
 - [ ] test if installation procedure works
+
+# Speed
+
+- [ ] Currently we execute b"SELECT contains_malware, contains_trackers, contains_adware from cache WHERE sha256 = '239e856979cf26ac999a83bd94d1984a38d65a7dcc6022c83ede2f97b937d60f'" three times. Optimize.
 
 # Nice to haves
 

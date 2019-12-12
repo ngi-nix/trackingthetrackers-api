@@ -1,21 +1,27 @@
 #!/usr/bin/env python
 
+# system imports
 import hashlib
+import shutil
 from tempfile import SpooledTemporaryFile
-import logging
+import random
+import os
+import datetime
 
+# FastAPI framework imports
 from fastapi import FastAPI, File, UploadFile
 from fastapi import HTTPException
 
+# local imports
 from malware_cache import *
+from models import ResponseModel
+from config import config
 
 app = FastAPI()
 cache = FileEntryCache()
 
-basedir = "/tmp/"
 
-
-def is_malware(filename: str) -> bool:
+def contains_malware(filename: str) -> bool:
     """
     This function returns True if the uploaded binary residing in "filename" is malware.
     False otherwise.
@@ -23,7 +29,17 @@ def is_malware(filename: str) -> bool:
     @return: True if malware
     """
     # XXX FIXME XXX insert the call to your function
-    return False
+    return random.random() > 0.5
+
+
+def contains_trackers(filename: str) -> bool:
+    # XXX FIXME XXX insert the call to your function
+    return random.random() > 0.5
+
+
+def contains_adware(filename: str) -> bool:
+    # XXX FIXME XXX insert the call to your function
+    return random.random() > 0.5
 
 
 def is_cached(sha256: str) -> bool:
@@ -33,25 +49,49 @@ def is_cached(sha256: str) -> bool:
     @return: True, if it's in the cache
     """
     global cache
-
     return sha256 in cache
 
 
-def permanently_store_file(orig_filename: str, file: SpooledTemporaryFile) -> str:
-    # docs: https://docs.python.org/3/library/io.html#io.IOBase
-    logging.info("storing %s ... to %s/%s" %(orig_filename, basedir, orig_filename))
-    entry = FileEntry()
-    cache.insert(entry)
-    return file.name
-
-
-def classify_apk_file(filename: str) -> bool:
+def store_file(orig_filename: str, file: SpooledTemporaryFile, sha256: str, upload_path=config['UPLOAD_PATH'], prefix="", suffix="") -> str:
     """
-    This function takes the uploaded file, and sends it to the classifier.
+    Stores a SpooledTemporaryFile to a permanent location and returns the path to it
+    @param orig_filename:  the APK filename
+    @param file: the SpooledTemporary File
+    @param sha256: the sha256 hash of the file
+    @param upload_path: where the uploaded file should be stored permanently
+    @param prefix: any prefix string which you might want to prepend (for example the current date as in "YYYY-MM-DD"
+    @param suffix: the suffix you might want to append. For example: ".apk". Note that you need to add the "." dot.
+    @return: full path to the stored file
+    """
+    # Unfortunately we need to really shutil.copyfileobj() the file object to disk, even though we already have a
+    # SpooledTemporaryFile object... this is needed for SpooledTemporaryFiles . Sucks. See here:
+    #   https://stackoverflow.com/questions/94153/how-do-i-persist-to-disk-a-temporary-file-using-python
+    #
+    # filepath syntax:  <UPLOAD_PATH>/<prefix><original filename>.sha256.pid<suffix>
+    #   example: /tmp/BAWAG.apk.
+    pid=os.getpid()
+    path = "{}/{}{}.{}.{}{}".format(upload_path, prefix, orig_filename, sha256, pid, suffix)
+    logging.info("storing %s ... to %s" %(orig_filename, path))
+    file.seek(0)
+    with open(path, "w+b") as outfile:
+       shutil.copyfileobj(file._file, outfile)
+    return path
+
+
+def classify_apk_file(filename: str, mode="malware") -> bool:
+    """
+    This function takes the uploaded file, and sends it to the classifier(s).
     Returns True if we consider this a positive, False otherwise.
     """
     logging.info("classify_apk_file(): file.filename = %s" %filename)
-    return is_malware(filename)
+    if mode=="malware":
+        return contains_malware(filename)
+    elif mode=="trackers":
+        return contains_trackers(filename)
+    elif mode=="adware":
+        return contains_adware(filename)
+    else:
+        raise("oops, don't know the classification category. Abort. We should not arrive at this code path.")
 
 
 def initial_check_file(file: UploadFile) -> bool:
@@ -64,6 +104,13 @@ def initial_check_file(file: UploadFile) -> bool:
     if file.content_type != "application/vnd.android.package-archive":
         raise HTTPException(status_code=400, detail="I only accept Android APK files as input.")
     return True
+
+
+def stage2_check_file(filename: str):
+    # XXX FIXME Implement if needed
+    unzip_file(filename)
+    extract_metadata_inf(filename)
+
 
 # ==============================================================
 # helper functions
@@ -89,6 +136,8 @@ async def hash_file(file: UploadFile) -> (str, str, str):
     md5 = hasher_md5.hexdigest()
     sha1 = hasher_sha1.hexdigest()
     sha256 = hasher_sha256.hexdigest()
+    logging.info("hashes %s / %s / %s" % (md5, sha1, sha256))
+    BLOCKSIZE = 65536
     return (md5, sha1, sha256)
 
 
@@ -104,35 +153,45 @@ def extract_metadata_inf(filename: str):
     pass
 
 
-def check_file_stage2(filename: str):
-    # XXX Implement
-    unzip_file(filename)
-    extract_metadata_inf(filename)
-
-
 # ==============================================================
 # main HTTP GET/POST endpoints
-@app.post("/api/v1/upload/binary/")
+@app.post("/api/v1/upload/binary/", response_model=ResponseModel)
 async def upload_file(file: UploadFile = File(...)):
     # file is a SpooledTemporaryFile (see:
     # https://docs.python.org/3/library/tempfile.html#tempfile.SpooledTemporaryFile) . So first write it to disk:
     initial_check_file(file)
     (md5, sha1, sha256) = await hash_file(file)
-    entry = FileEntry(file.filename, md5, sha1, sha256)
+    tmp_file_on_disk = store_file(file.filename, file.file, sha256, suffix=".apk")    # This dumps the file to disk and returns a Path
+    stage2_check_file(tmp_file_on_disk)                 # XXX FIXME. Additional checks on the dumped file still missing
+    entry = FileEntry(file.filename, path=tmp_file_on_disk, md5=md5, sha1=sha1, sha256=sha256,
+                      contains_malware=None, contains_trackers=None, contains_adware=None)
+    print(str(entry))
+    response_dict = {'uploaded_file': file.filename,
+                     'stored_path': tmp_file_on_disk,
+                     'already_analyzed': None,
+                     'md5': entry.md5,
+                     'sha1': entry.sha1,
+                     'sha256': entry.sha256,
+                     'classification': {},
+                     'extra': {},
+                    }
     if entry in cache:
-        contains_malware = cache.get_cached_result(entry)
-        return {'cache-hit': True, 'is_malware': is_positive}
-    else:
-        # XXX implement me please!
-        #stored_file = permanently_store_file(entry, file.file)
-        #check_file_stage2(stored_file)
-        # is_positive = classify_apk_file(stored_file)
-        stored_file = "/tmp/myupload.apk"
-        is_positive = True
-        # store_analysis(file, is_positive)      # XXX FIXME implement
-    return {'uploaded_file': stored_file,
-            'md5': md5,
-            'sha1': sha1,
-            'sha256': sha256,
-            "is_malware": is_positive}
-
+        print("in the if branch, ba!")
+        response_dict['already_analyzed'] = True
+        response_dict['classification']['contains_malware'] = cache.contains_malware(entry)
+        response_dict['classification']['contains_trackers'] = cache.contains_trackers(entry)
+        response_dict['classification']['contains_adware'] = cache.contains_adware(entry)
+        response_dict['extra'] = {}         # XXX FIXME: will be filled in later
+    else:       # not yet analysed, still need to
+        logging.info("This sample was not analysed yet. Analysing...")
+        entry.contains_malware = classify_apk_file(tmp_file_on_disk, mode="malware")
+        entry.contains_trackers = classify_apk_file(tmp_file_on_disk, mode="trackers")
+        entry.contains_adware = classify_apk_file(tmp_file_on_disk, mode="adware")
+        entry.analyzed_at = datetime.datetime.now()
+        response_dict['already_analyzed'] = False
+        response_dict['classification']['contains_malware'] = entry.contains_malware
+        response_dict['classification']['contains_trackers'] = entry.contains_trackers
+        response_dict['classification']['contains_adware'] = entry.contains_adware
+        cache.insert(entry)
+        logging.info(response_dict)
+    return response_dict

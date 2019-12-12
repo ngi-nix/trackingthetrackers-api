@@ -7,6 +7,7 @@ from tempfile import SpooledTemporaryFile
 import random
 import os
 import datetime
+import time
 
 # FastAPI framework imports
 from fastapi import FastAPI, File, UploadFile
@@ -21,7 +22,7 @@ app = FastAPI()
 cache = FileEntryCache()
 
 
-def contains_malware(filename: str) -> bool:
+async def contains_malware(filename: str) -> bool:
     """
     This function returns True if the uploaded binary residing in "filename" is malware.
     False otherwise.
@@ -32,17 +33,17 @@ def contains_malware(filename: str) -> bool:
     return random.random() > 0.5
 
 
-def contains_trackers(filename: str) -> bool:
+async def contains_trackers(filename: str) -> bool:
     # XXX FIXME XXX insert the call to your function
     return random.random() > 0.5
 
 
-def contains_adware(filename: str) -> bool:
+async def contains_adware(filename: str) -> bool:
     # XXX FIXME XXX insert the call to your function
     return random.random() > 0.5
 
 
-def is_cached(sha256: str) -> bool:
+async def is_cached(sha256: str) -> bool:
     """
     This function checks if a certain file's hash is in the global cache
     @param sha256: the hash of the uploaded file
@@ -52,7 +53,8 @@ def is_cached(sha256: str) -> bool:
     return sha256 in cache
 
 
-def store_file(orig_filename: str, file: SpooledTemporaryFile, sha256: str, upload_path=config['UPLOAD_PATH'], prefix="", suffix="") -> str:
+async def store_file(orig_filename: str, file: SpooledTemporaryFile, sha256: str, upload_path=config['UPLOAD_PATH'],
+                     prefix="", suffix="") -> str:
     """
     Stores a SpooledTemporaryFile to a permanent location and returns the path to it
     @param orig_filename:  the APK filename
@@ -69,32 +71,32 @@ def store_file(orig_filename: str, file: SpooledTemporaryFile, sha256: str, uplo
     #
     # filepath syntax:  <UPLOAD_PATH>/<prefix><original filename>.sha256.pid<suffix>
     #   example: /tmp/BAWAG.apk.
-    pid=os.getpid()
+    pid = os.getpid()
     path = "{}/{}{}.{}.{}{}".format(upload_path, prefix, orig_filename, sha256, pid, suffix)
-    logging.info("storing %s ... to %s" %(orig_filename, path))
+    logging.info("storing %s ... to %s" % (orig_filename, path))
     file.seek(0)
     with open(path, "w+b") as outfile:
-       shutil.copyfileobj(file._file, outfile)
+        shutil.copyfileobj(file._file, outfile)
     return path
 
 
-def classify_apk_file(filename: str, mode="malware") -> bool:
+async def classify_apk_file(filename: str, mode="malware") -> bool:
     """
     This function takes the uploaded file, and sends it to the classifier(s).
     Returns True if we consider this a positive, False otherwise.
     """
-    logging.info("classify_apk_file(): file.filename = %s" %filename)
-    if mode=="malware":
+    logging.info("classify_apk_file(): file.filename = %s" % filename)
+    if mode == "malware":
         return contains_malware(filename)
-    elif mode=="trackers":
+    elif mode == "trackers":
         return contains_trackers(filename)
-    elif mode=="adware":
+    elif mode == "adware":
         return contains_adware(filename)
     else:
-        raise("oops, don't know the classification category. Abort. We should not arrive at this code path.")
+        raise ("oops, don't know the classification category. Abort. We should not arrive at this code path.")
 
 
-def initial_check_file(file: UploadFile) -> bool:
+async def initial_check_file(file: UploadFile) -> bool:
     """
     Do an initial check of the file. All checks which can be done before
     it gets sent to the classifier should be run.
@@ -106,7 +108,7 @@ def initial_check_file(file: UploadFile) -> bool:
     return True
 
 
-def stage2_check_file(filename: str):
+async def stage2_check_file(filename: str):
     # XXX FIXME Implement if needed
     unzip_file(filename)
     extract_metadata_inf(filename)
@@ -120,14 +122,14 @@ async def hash_file(file: UploadFile) -> (str, str, str):
     @return: tuple: (md5, sha1, sha256)
     """
 
-    logging.info("hashing file %s" %file.file.name)
+    logging.info("hashing file %s" % file.file.name)
     BLOCKSIZE = 65536
     hasher_md5 = hashlib.md5()
     hasher_sha1 = hashlib.sha1()
     hasher_sha256 = hashlib.sha256()
     await file.seek(0)
     buf = await file.read(BLOCKSIZE)
-    logging.debug("buf = %r" %(buf,))
+    logging.debug("buf = %r" % (buf,))
     while len(buf) > 0:
         hasher_md5.update(buf)
         hasher_sha1.update(buf)
@@ -159,10 +161,13 @@ def extract_metadata_inf(filename: str):
 async def upload_file(file: UploadFile = File(...)):
     # file is a SpooledTemporaryFile (see:
     # https://docs.python.org/3/library/tempfile.html#tempfile.SpooledTemporaryFile) . So first write it to disk:
-    initial_check_file(file)
+    t0 = time.time()
+
+    await initial_check_file(file)
     (md5, sha1, sha256) = await hash_file(file)
-    tmp_file_on_disk = store_file(file.filename, file.file, sha256, suffix=".apk")    # This dumps the file to disk and returns a Path
-    stage2_check_file(tmp_file_on_disk)                 # XXX FIXME. Additional checks on the dumped file still missing
+    tmp_file_on_disk = await store_file(file.filename, file.file, sha256,
+                                  suffix=".apk")  # This dumps the file to disk and returns a Path
+    await stage2_check_file(tmp_file_on_disk)  # XXX FIXME. Additional checks on the dumped file still missing
     entry = FileEntry(file.filename, path=tmp_file_on_disk, md5=md5, sha1=sha1, sha256=sha256,
                       contains_malware=None, contains_trackers=None, contains_adware=None)
     print(str(entry))
@@ -174,19 +179,19 @@ async def upload_file(file: UploadFile = File(...)):
                      'sha256': entry.sha256,
                      'classification': {},
                      'extra': {},
-                    }
+                     }
     if entry in cache:
         print("in the if branch, ba!")
         response_dict['already_analyzed'] = True
         response_dict['classification']['contains_malware'] = cache.contains_malware(entry)
         response_dict['classification']['contains_trackers'] = cache.contains_trackers(entry)
         response_dict['classification']['contains_adware'] = cache.contains_adware(entry)
-        response_dict['extra'] = {}         # XXX FIXME: will be filled in later
-    else:       # not yet analysed, still need to
+        response_dict['extra'] = {}  # XXX FIXME: will be filled in later
+    else:  # not yet analysed, still need to
         logging.info("This sample was not analysed yet. Analysing...")
-        entry.contains_malware = classify_apk_file(tmp_file_on_disk, mode="malware")
-        entry.contains_trackers = classify_apk_file(tmp_file_on_disk, mode="trackers")
-        entry.contains_adware = classify_apk_file(tmp_file_on_disk, mode="adware")
+        entry.contains_malware = await classify_apk_file(tmp_file_on_disk, mode="malware")
+        entry.contains_trackers = await classify_apk_file(tmp_file_on_disk, mode="trackers")
+        entry.contains_adware = await classify_apk_file(tmp_file_on_disk, mode="adware")
         entry.analyzed_at = datetime.datetime.now()
         response_dict['already_analyzed'] = False
         response_dict['classification']['contains_malware'] = entry.contains_malware
@@ -194,4 +199,6 @@ async def upload_file(file: UploadFile = File(...)):
         response_dict['classification']['contains_adware'] = entry.contains_adware
         cache.insert(entry)
         logging.info(response_dict)
+    t1 = time.time()
+    logging.info('query-duration %f (sec)' % (t1-t0))
     return response_dict

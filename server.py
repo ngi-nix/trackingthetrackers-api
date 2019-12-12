@@ -83,6 +83,7 @@ async def store_file(orig_filename: str, file: SpooledTemporaryFile, sha256: str
 async def classify_apk_file(filename: str, mode="malware") -> bool:
     """
     This function takes the uploaded file, and sends it to the classifier(s).
+    Essentially it is a switch for different classifiers.
     Returns True if we consider this a positive, False otherwise.
     """
     logging.info("classify_apk_file(): file.filename = %s" % filename)

@@ -16,6 +16,7 @@ config.update(dict(
     DBHOST='localhost',
     DBPORT=5432,
     SECRET_KEY="Please generate a really long random string here",
+    UPLOAD_PATH="/tmp/",            # Change to the upload path where files should be stored
 ))
 
 

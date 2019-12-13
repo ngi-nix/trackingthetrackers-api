@@ -152,7 +152,7 @@ def unzip_file(filename: str):
 
 def extract_metadata_inf(filename: str):
     # extract METADATA.INF
-    # XXX Implement
+    # XXX FIXME Implement if needed
     pass
 
 
@@ -171,7 +171,6 @@ async def upload_file(file: UploadFile = File(...)):
     await stage2_check_file(tmp_file_on_disk)  # XXX FIXME. Additional checks on the dumped file still missing
     entry = FileEntry(file.filename, path=tmp_file_on_disk, md5=md5, sha1=sha1, sha256=sha256,
                       contains_malware=None, contains_trackers=None, contains_adware=None)
-    print(str(entry))
     response_dict = {'uploaded_file': file.filename,
                      'stored_path': tmp_file_on_disk,
                      'already_analyzed': None,

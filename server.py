@@ -80,7 +80,7 @@ async def store_file(orig_filename: str, file: SpooledTemporaryFile, sha256: str
     return path
 
 
-async def classify_apk_file(filename: str, mode="malware") -> bool:
+def classify_apk_file(filename: str, mode="malware") -> bool:
     """
     This function takes the uploaded file, and sends it to the classifier(s).
     Essentially it is a switch for different classifiers.
@@ -181,7 +181,7 @@ async def upload_file(file: UploadFile = File(...)):
                      'extra': {},
                      }
     if entry in cache:
-        print("in the if branch, ba!")
+        logging.info("Already analysed. Sending cached result.")
         response_dict['already_analyzed'] = True
         response_dict['classification']['contains_malware'] = cache.contains_malware(entry)
         response_dict['classification']['contains_trackers'] = cache.contains_trackers(entry)

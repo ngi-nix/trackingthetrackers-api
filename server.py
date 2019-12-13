@@ -22,7 +22,7 @@ app = FastAPI()
 cache = FileEntryCache()
 
 
-async def contains_malware(filename: str) -> bool:
+def contains_malware(filename: str) -> bool:
     """
     This function returns True if the uploaded binary residing in "filename" is malware.
     False otherwise.
@@ -33,17 +33,17 @@ async def contains_malware(filename: str) -> bool:
     return random.random() > 0.5
 
 
-async def contains_trackers(filename: str) -> bool:
+def contains_trackers(filename: str) -> bool:
     # XXX FIXME XXX insert the call to your function
     return random.random() > 0.5
 
 
-async def contains_adware(filename: str) -> bool:
+def contains_adware(filename: str) -> bool:
     # XXX FIXME XXX insert the call to your function
     return random.random() > 0.5
 
 
-async def is_cached(sha256: str) -> bool:
+def is_cached(sha256: str) -> bool:
     """
     This function checks if a certain file's hash is in the global cache
     @param sha256: the hash of the uploaded file
@@ -189,9 +189,9 @@ async def upload_file(file: UploadFile = File(...)):
         response_dict['extra'] = {}  # XXX FIXME: will be filled in later
     else:  # not yet analysed, still need to
         logging.info("This sample was not analysed yet. Analysing...")
-        entry.contains_malware = await classify_apk_file(tmp_file_on_disk, mode="malware")
-        entry.contains_trackers = await classify_apk_file(tmp_file_on_disk, mode="trackers")
-        entry.contains_adware = await classify_apk_file(tmp_file_on_disk, mode="adware")
+        entry.contains_malware = classify_apk_file(tmp_file_on_disk, mode="malware")
+        entry.contains_trackers = classify_apk_file(tmp_file_on_disk, mode="trackers")
+        entry.contains_adware = classify_apk_file(tmp_file_on_disk, mode="adware")
         entry.analyzed_at = datetime.datetime.now()
         response_dict['already_analyzed'] = False
         response_dict['classification']['contains_malware'] = entry.contains_malware

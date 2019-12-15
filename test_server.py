@@ -5,8 +5,15 @@ pytest-asyncio (version == 0.10.0)
 pytest-trio (version == 0.5.2)
 pytest_tornasync (version == 0.6.0.post2)
 
-To run just enter the apk-total file in terminal and run the command:
+
+To run tests just enter the apk-total file in terminal and run the command:
 pytest -v
+
+To run all tests in a file just add the filename:
+pytest -v test_server.py
+
+To run just a single test in a file, add "::testname" (without quotation marks), for example:
+pytest -v test_server.py::test_upload_no_file_response_status
 """
 import pytest
 import server

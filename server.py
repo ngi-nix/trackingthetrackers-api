@@ -200,5 +200,6 @@ async def upload_file(file: UploadFile = File(...)):
         cache.insert(entry)
         logging.info(response_dict)
     t1 = time.time()
-    logging.info('query-duration %f (sec)' % (t1-t0))
+    logging.info('query-duration %f (sec)' % (t1 - t0))
+    response_dict['extra'].update({'meta': {'query-duration [sec]': t1 - t0}})
     return response_dict

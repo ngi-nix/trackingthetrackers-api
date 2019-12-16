@@ -14,3 +14,4 @@ starlette==0.12.9
 uvicorn==0.10.8
 uvloop==0.14.0
 websockets==8.1
+pytest==5.3.2

@@ -25,29 +25,28 @@
             }
       ) // {
       # start the uvicorn service, possibly an nginx proxy as well if
-      # reverse-proxy.enabled = true;
       nixosModules = {
         ttapi = (
           { config, lib, pkgs, ... }:
             let
-              # TODO deal with secret
+              # TODO deal with secrets
               ttapi_secret_cfg = pkgs.writeText "ttapi-secrets"
                 (
                   lib.generators.toKeyValue {} {
-                    TTAPI_DB_PASSWORD = "foobar";
-                    TTAPI_USER_PASSWORD = "foobar";
+                    TTAPI_DB_PASSWORD = "ttapi";
+                    TTAPI_USER_PASSWORD = "ttapi";
                   }
                 );
-              cfg = config.services.ttapi-server;
+              cfg = config.services.ttapi-db;
             in
               {
                 options = {
-                  services.ttapi-server = {
+                  services.ttapi-db = {
                     enable = lib.mkOption {
                       default = false;
                       type = lib.types.bool;
                       description = ''
-                        Enable Tracking the Trackers API service.
+                        Enable and set up schema for Tracking the Trackers API database.
                       '';
                     };
                   };
@@ -64,14 +63,6 @@
                       }
                     ];
                   };
-                  systemd.services.ttapi-server = {
-                    description = "Tracking the Trackers API service";
-                    wantedBy = lib.mkIf cfg.enable [ "multi-user.target" ];
-                    after = [ "network.target" "postgresql.service" ];
-                    script = ''
-                      ${self.packages.python}/bin/uvicorn server:app
-                    '';
-                  };
                   systemd.services.ttapi-setup = {
                     script = ''
                       # Setup the db
@@ -83,8 +74,8 @@
 
                     after = [ " postgresql.service " ];
                     requires = [ " postgresql.service " ];
-                    before = [ " ttapi-server.service " ];
-                    requiredBy = [ " ttapi-server.service " ];
+                    before = [ " ttapi-db.service " ];
+                    requiredBy = [ " ttapi-db.service " ];
                     serviceConfig.EnvironmentFile = ttapi_secret_cfg;
                   };
                 };

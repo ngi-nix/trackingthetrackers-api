@@ -17,6 +17,7 @@
             requirements = builtins.readFile ./requirements.txt;
           in
             {
+              # TODO what should be the defaultPackage?
               # defaultPackage = self.packages.${system}.${pname};
               packages = { inherit pkgs; };
               devShell = mach-nix.mkPythonShell {
@@ -24,17 +25,15 @@
               };
             }
       ) // {
-      # start the uvicorn service, possibly an nginx proxy as well if
       nixosModules = {
         ttapi = (
           { config, lib, pkgs, ... }:
             let
-              # TODO deal with secrets
               ttapi_secret_cfg = pkgs.writeText "ttapi-secrets"
                 (
                   lib.generators.toKeyValue {} {
-                    TTAPI_DB_PASSWORD = "ttapi";
-                    TTAPI_USER_PASSWORD = "ttapi";
+                    TTAPI_DB_PASSWORD = "bincache";
+                    TTAPI_USER_PASSWORD = "bincache";
                   }
                 );
               cfg = config.services.ttapi-db;
@@ -43,7 +42,7 @@
                 options = {
                   services.ttapi-db = {
                     enable = lib.mkOption {
-                      default = false;
+                      default = true;
                       type = lib.types.bool;
                       description = ''
                         Enable and set up schema for Tracking the Trackers API database.
@@ -72,16 +71,47 @@
                         " ALTER ROLE '$TTAPI_DB_USER' WITH PASSWORD '$TTAPI_DB_PASSWORD' "
                     '';
 
-                    after = [ " postgresql.service " ];
-                    requires = [ " postgresql.service " ];
-                    before = [ " ttapi-db.service " ];
-                    requiredBy = [ " ttapi-db.service " ];
+                    after = [ "postgresql.service" ];
+                    requires = [ "postgresql.service" ];
+                    before = [ "ttapi-db.service" ];
+                    requiredBy = [ "ttapi-db.service" ];
                     serviceConfig.EnvironmentFile = ttapi_secret_cfg;
                   };
                 };
               }
         );
       };
-      nixosConfigurations.container = nixpkgs.lib.nixosSystem { system = " x86_64-linux "; modules = [ self.nixosModules.ttapi ({ pkgs, ... }: { system.configurationRevision = self.rev or " dirty "; networking.hostName = " ttapi "; networking.firewall.allowedTCPPorts = [ 8000 ]; services.getty.autologinUser = " root "; }) ]; };
+      nixosConfigurations.test-vm = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          (
+            { modulesPath, pkgs, ... }: {
+              imports = [ (modulesPath + "/virtualisation/qemu-vm.nix") ];
+            }
+          )
+          self.nixosModules.ttapi
+          (
+            { config, lib, pkgs, ... }: {
+              system.configurationRevision = self.rev or "dirty";
+              virtualisation = {
+                graphics = false;
+              };
+
+              #services.getty.autologinUser = "root";
+              services.qemuGuest.enable = true;
+              services.openssh.enable = true;
+              services.openssh.permitRootLogin = "yes";
+
+              networking.hostName = "ttapi";
+              networking.firewall.allowedTCPPorts = [ 5432 22 ];
+
+              users.extraUsers.root.password = "";
+              users.mutableUsers = false;
+
+              environment.systemPackages = with pkgs; [ lsof ];
+            }
+          )
+        ];
+      };
     };
 }

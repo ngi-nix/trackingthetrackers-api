@@ -21,10 +21,9 @@
               # defaultPackage = self.packages.${system}.${pname};
               packages = { inherit pkgs; };
               devShell = mach-nix.mkPythonShell {
-                inherit requirements;
                 # requests is absent from 'requirements.txt', but must be installed
                 # for starlette TestClient tests to run.
-                _.starlette.buildInputs.add = [ pkgs.requests ];
+                requirements = requirements + "requests";
               };
             }
       ) // {

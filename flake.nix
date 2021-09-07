@@ -22,20 +22,18 @@
               packages = { inherit pkgs; };
               devShell = mach-nix.mkPythonShell {
                 inherit requirements;
+                # requests is absent from 'requirements.txt', but must be installed
+                # for starlette TestClient tests to run.
+                _.starlette.buildInputs.add = [ pkgs.requests ];
               };
             }
       ) // {
       nixosModules = {
-        ttapi = (
+        ttapi-db = (
           { config, lib, pkgs, ... }:
             let
-              ttapi_secret_cfg = pkgs.writeText "ttapi-secrets"
-                (
-                  lib.generators.toKeyValue {} {
-                    TTAPI_DB_PASSWORD = "bincache";
-                    TTAPI_USER_PASSWORD = "bincache";
-                  }
-                );
+              db_user = "bincache";
+              db_name = "bincache";
               cfg = config.services.ttapi-db;
             in
               {
@@ -54,28 +52,29 @@
                 config = {
                   services.postgresql = {
                     enable = lib.mkIf cfg.enable true;
-                    ensureDatabases = [ "bincache" ];
+                    enableTCPIP = true;
+                    # Make sure we can auth from outside of vm..
+                    authentication = lib.mkForce ''
+                      local  all  all                         trust
+                      host   all  ${db_user}  10.0.0.0/8      trust
+                      host   all  ${db_user}  172.16.0.0/12   trust
+                      host   all  ${db_user}  192.168.0.0/16  trust
+                    '';
+                    ensureDatabases = [ "${db_name}" ];
                     ensureUsers = [
                       {
-                        name = "ttapi";
-                        ensurePermissions = { "DATABASE bincache" = "ALL PRIVILEGES"; };
+                        name = "${db_user}";
+                        ensurePermissions = {
+                          "DATABASE ${db_name}" = "ALL PRIVILEGES";
+                          "ALL TABLES IN SCHEMA public" = "ALL PRIVILEGES";
+                        };
                       }
                     ];
-                  };
-                  systemd.services.ttapi-setup = {
-                    script = ''
-                      # Setup the db
-                      set -eu
-                      ${pkgs.utillinux}/bin/runuser -u ${config.services.postgresql.superUser} -- \
-                        ${config.services.postgresql.package}/bin/psql -c \
-                        " ALTER ROLE '$TTAPI_DB_USER' WITH PASSWORD '$TTAPI_DB_PASSWORD' "
-                    '';
-
-                    after = [ "postgresql.service" ];
-                    requires = [ "postgresql.service" ];
-                    before = [ "ttapi-db.service" ];
-                    requiredBy = [ "ttapi-db.service" ];
-                    serviceConfig.EnvironmentFile = ttapi_secret_cfg;
+                    # Initialize table and indexes from project's db.sql
+                    initialScript = pkgs.writeTextFile {
+                      name = "initialScript.sql";
+                      text = (builtins.readFile ./db/db.sql); #+ ''
+                    };
                   };
                 };
               }
@@ -89,7 +88,7 @@
               imports = [ (modulesPath + "/virtualisation/qemu-vm.nix") ];
             }
           )
-          self.nixosModules.ttapi
+          self.nixosModules.ttapi-db
           (
             { config, lib, pkgs, ... }: {
               system.configurationRevision = self.rev or "dirty";
@@ -97,18 +96,15 @@
                 graphics = false;
               };
 
-              #services.getty.autologinUser = "root";
-              services.qemuGuest.enable = true;
+              services.getty.autologinUser = "root";
               services.openssh.enable = true;
               services.openssh.permitRootLogin = "yes";
 
-              networking.hostName = "ttapi";
+              networking.hostName = "ttapi-db";
               networking.firewall.allowedTCPPorts = [ 5432 22 ];
 
               users.extraUsers.root.password = "";
               users.mutableUsers = false;
-
-              environment.systemPackages = with pkgs; [ lsof ];
             }
           )
         ];

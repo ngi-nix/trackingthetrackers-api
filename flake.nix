@@ -21,9 +21,14 @@
               # defaultPackage = self.packages.${system}.${pname};
               packages = { inherit pkgs; };
               devShell = mach-nix.mkPythonShell {
-                # requests is absent from 'requirements.txt', but must be installed
-                # for starlette TestClient tests to run.
-                requirements = requirements + "requests";
+                # some extra packages are needed for tests to pass, but
+                # absent from requirements.txt:
+                requirements = requirements + ''
+                  requests
+                  pytest-asyncio
+                  pytest-tornasync
+                  pytest-trio
+                '';
               };
             }
       ) // {
@@ -42,7 +47,7 @@
                       default = true;
                       type = lib.types.bool;
                       description = ''
-                        Enable and set up schema for Tracking the Trackers API database.
+                        Initialize and enable the Tracking the Trackers API database.
                       '';
                     };
                   };
@@ -80,10 +85,14 @@
         );
       };
       nixosConfigurations.test-vm = nixpkgs.lib.nixosSystem {
+        # First build the VM:
+        #  $ nixos-rebuild build-vm --flake .#test-vm
+        # Then remove old images if any, set port forwards and run VM:
+        #  $ rm ttapi-db.qcow2; env QEMU_NET_OPTS=hostfwd=tcp:2221-:22,hostfwd=tcp::5433-:5432 result/bin/run-ttapi-db-vm
         system = "x86_64-linux";
         modules = [
           (
-            { modulesPath, pkgs, ... }: {
+            { modulesPath, ... }: {
               imports = [ (modulesPath + "/virtualisation/qemu-vm.nix") ];
             }
           )
@@ -91,19 +100,26 @@
           (
             { config, lib, pkgs, ... }: {
               system.configurationRevision = self.rev or "dirty";
+
               virtualisation = {
                 graphics = false;
               };
 
-              services.getty.autologinUser = "root";
-              services.openssh.enable = true;
-              services.openssh.permitRootLogin = "yes";
+              services = {
+                getty.autologinUser = "root";
+                openssh.enable = true;
+                openssh.permitRootLogin = "yes";
+              };
 
-              networking.hostName = "ttapi-db";
-              networking.firewall.allowedTCPPorts = [ 5432 22 ];
+              networking = {
+                hostName = "ttapi-db";
+                firewall.allowedTCPPorts = [ 5432 22 ];
+              };
 
-              users.extraUsers.root.password = "";
-              users.mutableUsers = false;
+              users = {
+                extraUsers.root.password = "";
+                mutableUsers = false;
+              };
             }
           )
         ];

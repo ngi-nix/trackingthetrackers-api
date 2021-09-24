@@ -13,9 +13,6 @@
       defaultSystems = flake-utils.lib.defaultSystems;
       buildSystems = lib.lists.subtractLists
         [ "aarch64-darwin" "x86_64-darwin" ] defaultSystems;
-
-      #buildSystems = lib.lists.remove "aarch64-darwin"
-      #  (lib.lists.remove "x86_64-darwin" defaultSystems);
     in
       flake-utils.lib.eachSystem buildSystems (
         system:
